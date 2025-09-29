@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>迷宫生成与求解可视化</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        dark: '#1F2937',
+                        light: '#F9FAFB',
+                        accent: '#8B5CF6',
+                        danger: '#EF4444',
+                        wall: '#1E293B',
+                        path: '#FFFFFF',
+                        start: '#10B981',
+                        end: '#EF4444',
+                        visited: '#DBEAFE',
+                        solution: '#3B82F6'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .maze-cell {
+                @apply transition-all duration-150;
+            }
+            .maze-wall {
+                @apply bg-wall shadow-md;
+            }
+            .maze-path {
+                @apply bg-path;
+            }
+            .maze-start {
+                @apply bg-start shadow-lg;
+            }
+            .maze-end {
+                @apply bg-end shadow-lg;
+            }
+            .maze-visited {
+                @apply bg-visited;
+            }
+            .maze-solution {
+                @apply bg-solution shadow-md;
+            }
+            .btn {
+                @apply px-4 py-2 rounded-md font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+            }
+            .btn-primary {
+                @apply bg-primary text-white hover:bg-primary/90 focus:ring-primary/50;
+            }
+            .btn-secondary {
+                @apply bg-gray-200 text-dark hover:bg-gray-300 focus:ring-gray-400;
+            }
+            .form-control {
+                @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary;
+            }
+            .stat-card {
+                @apply bg-white rounded-xl shadow-md p-4 transition-all duration-300 hover:shadow-lg;
+            }
+            .stat-title {
+                @apply text-sm font-medium text-gray-500 mb-1;
+            }
+            .stat-value {
+                @apply text-lg font-semibold text-dark;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="text-center mb-8">
+            <h1 class="text-[clamp(2rem,5vw,3.5rem)] font-bold text-dark mb-2 tracking-tight">迷宫生成与求解可视化</h1>
+            <p class="text-gray-600 text-lg max-w-3xl mx-auto">探索不同算法如何生成迷宫并找到出路，直观了解深度优先搜索、广度优先搜索和A*算法的工作原理</p>
+        </header>
+
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label for="maze-width" class="block text-sm font-medium text-gray-700 mb-1">迷宫宽度</label>
+                    <input type="number" id="maze-width" class="form-control" min="5" max="150" value="30">
+                </div>
+                <div>
+                    <label for="maze-height" class="block text-sm font-medium text-gray-700 mb-1">迷宫高度</label>
+                    <input type="number" id="maze-height" class="form-control" min="5" max="150" value="30">
+                </div>
+                <div>
+                    <label for="animation-speed" class="block text-sm font-medium text-gray-700 mb-1">动画速度</label>
+                    <input type="range" id="animation-speed" class="form-control" min="1" max="100" value="70">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">生成算法</label>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="gen-dfs" class="btn btn-primary flex items-center">
+                            <i class="fa fa-random mr-2"></i>深度优先搜索
+                        </button>
+                        <button id="gen-prim" class="btn btn-secondary flex items-center">
+                            <i class="fa fa-th mr-2"></i>随机Prim算法
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">求解算法</label>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="solve-dfs" class="btn btn-secondary flex items-center">
+                            <i class="fa fa-search mr-2"></i>深度优先搜索
+                        </button>
+                        <button id="solve-bfs" class="btn btn-primary flex items-center">
+                            <i class="fa fa-sitemap mr-2"></i>广度优先搜索
+                        </button>
+                        <button id="solve-astar" class="btn btn-primary flex items-center">
+                            <i class="fa fa-star mr-2"></i>A*算法
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-center mt-6">
+                <button id="clear-maze" class="btn btn-secondary flex items-center">
+                    <i class="fa fa-refresh mr-2"></i>重置迷宫
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div class="lg:col-span-3">
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div class="p-4 border-b border-gray-100">
+                        <h2 class="text-xl font-semibold text-dark flex items-center">
+                            <i class="fa fa-th mr-2 text-primary"></i>迷宫
+                        </h2>
+                    </div>
+                    <div id="maze-container" class="p-4 flex justify-center bg-gray-50">
+                        <canvas id="maze-canvas" class="border border-gray-200 rounded-lg shadow-md"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="space-y-6">
+                <div class="stat-card">
+                    <h2 class="text-lg font-semibold text-dark mb-4 flex items-center">
+                        <i class="fa fa-bar-chart mr-2 text-primary"></i>算法统计
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="stat-title">生成算法</h3>
+                            <p id="gen-algorithm" class="stat-value">未生成</p>
+                        </div>
+                        <div>
+                            <h3 class="stat-title">生成时间</h3>
+                            <p id="gen-time" class="stat-value">-- ms</p>
+                        </div>
+                        <div>
+                            <h3 class="stat-title">求解算法</h3>
+                            <p id="solve-algorithm" class="stat-value">未求解</p>
+                        </div>
+                        <div>
+                            <h3 class="stat-title">求解时间</h3>
+                            <p id="solve-time" class="stat-value">-- ms</p>
+                        </div>
+                        <div>
+                            <h3 class="stat-title">路径长度</h3>
+                            <p id="path-length" class="stat-value">-- 步</p>
+                        </div>
+                        <div>
+                            <h3 class="stat-title">访问节点数</h3>
+                            <p id="visited-count" class="stat-value">-- 个</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <h2 class="text-lg font-semibold text-dark mb-4 flex items-center">
+                        <i class="fa fa-info-circle mr-2 text-primary"></i>图例
+                    </h2>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="flex items-center">
+                            <div class="w-6 h-6 maze-wall rounded-sm mr-2"></div>
+                            <span class="text-sm">墙壁</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-6 h-6 maze-path border border-gray-200 rounded-sm mr-2"></div>
+                            <span class="text-sm">路径</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-6 h-6 maze-start rounded-sm mr-2"></div>
+                            <span class="text-sm">起点</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-6 h-6 maze-end rounded-sm mr-2"></div>
+                            <span class="text-sm">终点</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-6 h-6 maze-visited rounded-sm mr-2"></div>
+                            <span class="text-sm">已访问</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-6 h-6 maze-solution rounded-sm mr-2"></div>
+                            <span class="text-sm">解路径</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-lg p-6 mt-8">
+            <h2 class="text-xl font-semibold text-dark mb-4 flex items-center">
+                <i class="fa fa-book mr-2 text-primary"></i>算法说明
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="p-4 rounded-lg border border-gray-100 hover:border-primary/30 transition-all duration-300">
+                    <h3 class="text-lg font-medium text-primary mb-2">深度优先搜索 (DFS)</h3>
+                    <p class="text-gray-600">递归探索迷宫，随机选择方向，回溯时打通墙壁。生成的迷宫具有长走廊和较少分支，路径通常曲折但直接。</p>
+                </div>
+                <div class="p-4 rounded-lg border border-gray-100 hover:border-primary/30 transition-all duration-300">
+                    <h3 class="text-lg font-medium text-primary mb-2">广度优先搜索 (BFS)</h3>
+                    <p class="text-gray-600">逐层扩展搜索，保证找到最短路径。使用队列管理待访问节点，空间复杂度较高，但路径最优。</p>
+                </div>
+                <div class="p-4 rounded-lg border border-gray-100 hover:border-primary/30 transition-all duration-300">
+                    <h3 class="text-lg font-medium text-primary mb-2">A*算法</h3>
+                    <p class="text-gray-600">启发式搜索算法，结合BFS的完备性和贪心搜索的高效性，使用曼哈顿距离作为启发函数，通常能更快找到最优路径。</p>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+            <p>迷宫生成与求解可视化工具 &copy; 2023</p>
+        </footer>
+    </div>
+
+    <script>
+        const CELL = {
+            WALL: 0,
+            PATH: 1,
+            START: 2,
+            END: 3,
+            VISITED: 4,
+            SOLUTION: 5
+        };
+
+        const DIRECTIONS = [
+            { dx: 0, dy: -1 },
+            { dx: 1, dy: 0 },
+            { dx: 0, dy: 1 },
+            { dx: -1, dy: 0 }
+        ];
+
+        class Maze {
+            constructor(width, height) {
+                this.width = width;
+                this.height = height;
+                this.cells = Array(height).fill().map(() => Array(width).fill(CELL.WALL));
+                this.start = { x: 1, y: 1 };
+                this.end = { x: width - 2, y: height - 2 };
+                this.animationSpeed = 70; // 提高默认动画速度
+                this.isAnimating = false;
+                
+                this.canvas = document.getElementById('maze-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.resizeCanvas();
+                
+                window.addEventListener('resize', () => this.resizeCanvas());
+                document.getElementById('animation-speed').addEventListener('input', (e) => {
+                    this.animationSpeed = parseInt(e.target.value);
+                });
+            }
+            
+            resizeCanvas() {
+                const container = document.getElementById('maze-container');
+                const cellSize = Math.min(
+                    Math.floor(container.clientWidth / this.width),
+                    Math.floor(container.clientHeight / this.height)
+                );
+                
+                // 确保单元格大小至少为4px，使迷宫在大屏幕上更清晰
+                const minCellSize = 4;
+                const adjustedCellSize = Math.max(cellSize, minCellSize);
+                
+                this.canvas.width = this.width * adjustedCellSize;
+                this.canvas.height = this.height * adjustedCellSize;
+                this.cellSize = adjustedCellSize;
+                
+                this.draw();
+            }
+            
+            draw() {
+                const { ctx, width, height, cellSize } = this;
+                ctx.clearRect(0, 0, width * cellSize, height * cellSize);
+                
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        ctx.fillStyle = this.getCellColor(x, y);
+                        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                        
+                        // 增强墙壁的视觉效果
+                        if (this.cells[y][x] === CELL.WALL) {
+                            ctx.fillStyle = '#1E293B';
+                            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                            
+                            // 添加阴影效果增强立体感
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize / 2);
+                            ctx.fillRect(x * cellSize, y * cellSize, cellSize / 2, cellSize);
+                        }
+                        
+                        // 增强起点和终点的视觉效果
+                        if (this.cells[y][x] === CELL.START || this.cells[y][x] === CELL.END) {
+                            // 添加边框
+                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                            
+                            // 添加内部细节
+                            const innerSize = cellSize * 0.7;
+                            const offset = (cellSize - innerSize) / 2;
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                            ctx.beginPath();
+                            ctx.arc(x * cellSize + cellSize / 2, y * cellSize + cellSize / 2, innerSize / 2, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                }
+            }
+            
+            getCellColor(x, y) {
+                switch (this.cells[y][x]) {
+                    case CELL.WALL: return '#1E293B';
+                    case CELL.PATH: return '#FFFFFF';
+                    case CELL.START: return '#10B981';
+                    case CELL.END: return '#EF4444';
+                    case CELL.VISITED: return '#DBEAFE';
+                    case CELL.SOLUTION: return '#3B82F6';
+                    default: return '#FFFFFF';
+                }
+            }
+            
+            async generateDFS() {
+                this.reset();
+                this.isAnimating = true;
+                document.getElementById('gen-algorithm').textContent = '深度优先搜索';
+                const startTime = performance.now();
+                
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        this.cells[y][x] = CELL.WALL;
+                    }
+                }
+                
+                const stack = [];
+                const startX = 1;
+                const startY = 1;
+                this.cells[startY][startX] = CELL.PATH;
+                stack.push({ x: startX, y: startY });
+                
+                const animateStep = async () => {
+                    if (stack.length === 0) {
+                        this.setStartEnd();
+                        this.isAnimating = false;
+                        document.getElementById('gen-time').textContent = `${Math.round(performance.now() - startTime)} ms`;
+                        return;
+                    }
+                    
+                    const current = stack[stack.length - 1];
+                    const unvisitedNeighbors = [];
+                    
+                    for (const dir of DIRECTIONS) {
+                        const nx = current.x + dir.dx * 2;
+                        const ny = current.y + dir.dy * 2;
+                        if (nx > 0 && nx < this.width - 1 && ny > 0 && ny < this.height - 1 && 
+                            this.cells[ny][nx] === CELL.WALL) {
+                            unvisitedNeighbors.push({ nx, ny, dir });
+                        }
+                    }
+                    
+                    if (unvisitedNeighbors.length === 0) {
+                        stack.pop();
+                    } else {
+                        const randomNeighbor = unvisitedNeighbors[Math.floor(Math.random() * unvisitedNeighbors.length)];
+                        const { nx, ny, dir } = randomNeighbor;
+                        this.cells[ny][nx] = CELL.PATH;
+                        this.cells[current.y + dir.dy][current.x + dir.dx] = CELL.PATH;
+                        stack.push({ x: nx, y: ny });
+                    }
+                    
+                    this.draw();
+                    await new Promise(resolve => setTimeout(resolve, 100 - this.animationSpeed));
+                    requestAnimationFrame(animateStep);
+                };
+                
+                requestAnimationFrame(animateStep);
+            }
+            
+            async generatePrim() {
+                this.reset();
+                this.isAnimating = true;
+                document.getElementById('gen-algorithm').textContent = '随机Prim算法';
+                const startTime = performance.now();
+                
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        this.cells[y][x] = CELL.WALL;
+                    }
+                }
+                
+                const startX = 1 + Math.floor(Math.random() * (this.width - 2) / 2) * 2;
+                const startY = 1 + Math.floor(Math.random() * (this.height - 2) / 2) * 2;
+                this.cells[startY][startX] = CELL.PATH;
+                
+                const walls = [];
+                for (const dir of DIRECTIONS) {
+                    const nx = startX + dir.dx;
+                    const ny = startY + dir.dy;
+                    if (nx > 0 && nx < this.width - 1 && ny > 0 && ny < this.height - 1) {
+                        walls.push({ x: nx, y: ny, dir });
+                    }
+                }
+                
+                const animateStep = async () => {
+                    if (walls.length === 0) {
+                        this.setStartEnd();
+                        this.isAnimating = false;
+                        document.getElementById('gen-time').textContent = `${Math.round(performance.now() - startTime)} ms`;
+                        return;
+                    }
+                    
+                    const randomIndex = Math.floor(Math.random() * walls.length);
+                    const wall = walls[randomIndex];
+                    const oppositeX = wall.x + wall.dir.dx;
+                    const oppositeY = wall.y + wall.dir.dy;
+                    
+                    if (this.cells[oppositeY][oppositeX] === CELL.WALL) {
+                        this.cells[wall.y][wall.x] = CELL.PATH;
+                        this.cells[oppositeY][oppositeX] = CELL.PATH;
+                        
+                        for (const dir of DIRECTIONS) {
+                            const nx = oppositeX + dir.dx;
+                            const ny = oppositeY + dir.dy;
+                            if (nx > 0 && nx < this.width - 1 && ny > 0 && ny < this.height - 1 && 
+                                this.cells[ny][nx] === CELL.WALL) {
+                                walls.push({ x: nx, y: ny, dir });
+                            }
+                        }
+                    }
+                    
+                    walls.splice(randomIndex, 1);
+                    this.draw();
+                    await new Promise(resolve => setTimeout(resolve, 100 - this.animationSpeed));
+                    requestAnimationFrame(animateStep);
+                };
+                
+                requestAnimationFrame(animateStep);
+            }
+            
+            async solveDFS() {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+                document.getElementById('solve-algorithm').textContent = '深度优先搜索';
+                const startTime = performance.now();
+                const visited = Array(this.height).fill().map(() => Array(this.width).fill(false));
+                const path = [];
+                let visitedCount = 0;
+                
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        if (this.cells[y][x] !== CELL.WALL && this.cells[y][x] !== CELL.START && this.cells[y][x] !== CELL.END) {
+                            this.cells[y][x] = CELL.PATH;
+                        }
+                    }
+                }
+                
+                const dfs = async (x, y) => {
+                    if (x < 0 || y < 0 || x >= this.width || y >= this.height || 
+                        this.cells[y][x] === CELL.WALL || visited[y][x]) {
+                        return false;
+                    }
+                    
+                    if (this.cells[y][x] === CELL.END) {
+                        return true;
+                    }
+                    
+                    visited[y][x] = true;
+                    visitedCount++;
+                    
+                    if (this.cells[y][x] !== CELL.START) {
+                        this.cells[y][x] = CELL.VISITED;
+                    }
+                    
+                    this.draw();
+                    await new Promise(resolve => setTimeout(resolve, 100 - this.animationSpeed));
+                    
+                    for (const dir of DIRECTIONS) {
+                        const nx = x + dir.dx;
+                        const ny = y + dir.dy;
+                        if (await dfs(nx, ny)) {
+                            if (this.cells[y][x] !== CELL.START) {
+                                this.cells[y][x] = CELL.SOLUTION;
+                            }
+                            path.push({ x, y });
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                };
+                
+                const found = await dfs(this.start.x, this.start.y);
+                
+                if (found) {
+                    for (const p of path) {
+                        if (this.cells[p.y][p.x] !== CELL.START && this.cells[p.y][p.x] !== CELL.END) {
+                            this.cells[p.y][p.x] = CELL.SOLUTION;
+                        }
+                    }
+                    this.draw();
+                    document.getElementById('path-length').textContent = path.length + 1;
+                } else {
+                    document.getElementById('path-length').textContent = '无解';
+                }
+                
+                document.getElementById('visited-count').textContent = visitedCount;
+                document.getElementById('solve-time').textContent = `${Math.round(performance.now() - startTime)} ms`;
+                this.isAnimating = false;
+            }
+            
+            async solveBFS() {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+                document.getElementById('solve-algorithm').textContent = '广度优先搜索';
+                const startTime = performance.now();
+                const visited = Array(this.height).fill().map(() => Array(this.width).fill(false));
+                const queue = [];
+                const prev = Array(this.height).fill().map(() => Array(this.width).fill(null));
+                let visitedCount = 0;
+                
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        if (this.cells[y][x] !== CELL.WALL && this.cells[y][x] !== CELL.START && this.cells[y][x] !== CELL.END) {
+                            this.cells[y][x] = CELL.PATH;
+                        }
+                    }
+                }
+                
+                queue.push({ x: this.start.x, y: this.start.y });
+                visited[this.start.y][this.start.x] = true;
+                
+                const animateStep = async () => {
+                    if (queue.length === 0) {
+                        document.getElementById('path-length').textContent = '无解';
+                        this.isAnimating = false;
+                        document.getElementById('solve-time').textContent = `${Math.round(performance.now() - startTime)} ms`;
+                        return;
+                    }
+                    
+                    const current = queue.shift();
+                    
+                    if (this.cells[current.y][current.x] === CELL.END) {
+                        let path = [];
+                        let p = current;
+                        while (p !== null) {
+                            path.push(p);
+                            p = prev[p.y][p.x];
+                        }
+                        path.reverse();
+                        
+                        for (let i = 0; i < path.length; i++) {
+                            const { x, y } = path[i];
+                            if (this.cells[y][x] !== CELL.START && this.cells[y][x] !== CELL.END) {
+                                this.cells[y][x] = CELL.SOLUTION;
+                            }
+                            this.draw();
+                            await new Promise(resolve => setTimeout(resolve, 100 - this.animationSpeed));
+                        }
+                        
+                        document.getElementById('path-length').textContent = path.length - 1;
+                        document.getElementById('visited-count').textContent = visitedCount;
+                        document.getElementById('solve-time').textContent = `${Math.round(performance.now() - startTime)} ms`;
+                        this.isAnimating = false;
+                        return;
+                    }
+                    
+                    visitedCount++;
+                    if (this.cells[current.y][current.x] !== CELL.START) {
+                        this.cells[current.y][current.x] = CELL.VISITED;
+                    }
+                    
+                    for (const dir of DIRECTIONS) {
+                        const nx = current.x + dir.dx;
+                        const ny = current.y + dir.dy;
+                        if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height && 
+                            this.cells[ny][nx] !== CELL.WALL && !visited[ny][nx]) {
+                            queue.push({ x: nx, y: ny });
+                            visited[ny][nx] = true;
+                            prev[ny][nx] = current;
+                        }
+                    }
+                    
+                    this.draw();
+                    await new Promise(resolve => setTimeout(resolve, 100 - this.animationSpeed));
+                    requestAnimationFrame(animateStep);
+                };
+                
+                requestAnimationFrame(animateStep);
+            }
+            
+            async solveAStar() {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+                document.getElementById('solve-algorithm').textContent = 'A*算法';
+                const startTime = performance.now();
+                const visited = Array(this.height).fill().map(() => Array(this.width).fill(false));
+                const openSet = [];
+                const closedSet = [];
+                const gScore = Array(this.height).fill().map(() => Array(this.width).fill(Infinity));
+                const fScore = Array(this.height).fill().map(() => Array(this.width).fill(Infinity));
+                const prev = Array(this.height).fill().map(() => Array(this.width).fill(null));
+                let visitedCount = 0;
+                
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        if (this.cells[y][x] !== CELL.WALL && this.cells[y][x] !== CELL.START && this.cells[y][x] !== CELL.END) {
+                            this.cells[y][x] = CELL.PATH;
+                        }
+                    }
+                }
+                
+                const heuristic = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+                
+                const startNode = { x: this.start.x, y: this.start.y };
+                gScore[this.start.y][this.start.x] = 0;
+                fScore[this.start.y][this.start.x] = heuristic(startNode, this.end);
+                openSet.push(startNode);
+                
+                const animateStep = async () => {
+                    if (openSet.length === 0) {
+                        document.getElementById('path-length').textContent = '无解';
+                        this.isAnimating = false;
+                        document.getElementById('solve-time').textContent = `${Math.round(performance.now() - startTime)} ms`;
+                        return;
+                    }
+                    
+                    let currentIndex = 0;
+                    for (let i = 0; i < openSet.length; i++) {
+                        if (fScore[openSet[i].y][openSet[i].x] < fScore[openSet[currentIndex].y][openSet[currentIndex].x]) {
+                            currentIndex = i;
+                        }
+                    }
+                    
+                    const current = openSet[currentIndex];
+                    
+                    if (current.x === this.end.x && current.y === this.end.y) {
+                        let path = [];
+                        let p = current;
+                        while (p !== null) {
+                            path.push(p);
+                            p = prev[p.y][p.x];
+                        }
+                        path.reverse();
+                        
+                        for (let i = 0; i < path.length; i++) {
+                            const { x, y } = path[i];
+                            if (this.cells[y][x] !== CELL.START && this.cells[y][x] !== CELL.END) {
+                                this.cells[y][x] = CELL.SOLUTION;
+                            }
+                            this.draw();
+                            await new Promise(resolve => setTimeout(resolve, 100 - this.animationSpeed));
+                        }
+                        
+                        document.getElementById('path-length').textContent = path.length - 1;
+                        document.getElementById('visited-count').textContent = visitedCount;
+                        document.getElementById('solve-time').textContent = `${Math.round(performance.now() - startTime)} ms`;
+                        this.isAnimating = false;
+                        return;
+                    }
+                    
+                    openSet.splice(currentIndex, 1);
+                    closedSet.push(current);
+                    visitedCount++;
+                    
+                    if (this.cells[current.y][current.x] !== CELL.START) {
+                        this.cells[current.y][current.x] = CELL.VISITED;
+                    }
+                    
+                    for (const dir of DIRECTIONS) {
+                        const nx = current.x + dir.dx;
+                        const ny = current.y + dir.dy;
+                        
+                        if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height && 
+                            this.cells[ny][nx] !== CELL.WALL) {
+                            
+                            const neighbor = { x: nx, y: ny };
+                            
+                            if (closedSet.some(node => node.x === nx && node.y === ny)) {
+                                continue;
+                            }
+                            
+                            const tentativeGScore = gScore[current.y][current.x] + 1;
+                            
+                            if (!openSet.some(node => node.x === nx && node.y === ny)) {
+                                openSet.push(neighbor);
+                            } else if (tentativeGScore >= gScore[ny][nx]) {
+                                continue;
+                            }
+                            
+                            prev[ny][nx] = current;
+                            gScore[ny][nx] = tentativeGScore;
+                            fScore[ny][nx] = tentativeGScore + heuristic(neighbor, this.end);
+                        }
+                    }
+                    
+                    this.draw();
+                    await new Promise(resolve => setTimeout(resolve, 100 - this.animationSpeed));
+                    requestAnimationFrame(animateStep);
+                };
+                
+                requestAnimationFrame(animateStep);
+            }
+            
+            setStartEnd() {
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        if (this.cells[y][x] === CELL.START || this.cells[y][x] === CELL.END) {
+                            this.cells[y][x] = CELL.PATH;
+                        }
+                    }
+                }
+                
+                this.start = { x: 1, y: 1 };
+                this.end = { x: this.width - 2, y: this.height - 2 };
+                this.cells[this.start.y][this.start.x] = CELL.START;
+                this.cells[this.end.y][this.end.x] = CELL.END;
+            }
+            
+            reset() {
+                for (let y = 0; y < this.height; y++) {
+                    for (let x = 0; x < this.width; x++) {
+                        if (this.cells[y][x] !== CELL.WALL) {
+                            this.cells[y][x] = CELL.PATH;
+                        }
+                    }
+                }
+                this.setStartEnd();
+                this.draw();
+            }
+        }
+
+        // 初始化迷宫
+        let maze;
+        
+        // 初始化页面
+        document.addEventListener('DOMContentLoaded', () => {
+            const width = parseInt(document.getElementById('maze-width').value);
+            const height = parseInt(document.getElementById('maze-height').value);
+            maze = new Maze(width, height);
+            
+            // 绑定按钮事件
+            document.getElementById('gen-dfs').addEventListener('click', () => maze.generateDFS());
+            document.getElementById('gen-prim').addEventListener('click', () => maze.generatePrim());
+            document.getElementById('solve-dfs').addEventListener('click', () => maze.solveDFS());
+            document.getElementById('solve-bfs').addEventListener('click', () => maze.solveBFS());
+            document.getElementById('solve-astar').addEventListener('click', () => maze.solveAStar());
+            document.getElementById('clear-maze').addEventListener('click', () => {
+                maze.reset();
+                document.getElementById('gen-algorithm').textContent = '未生成';
+                document.getElementById('gen-time').textContent = '-- ms';
+                document.getElementById('solve-algorithm').textContent = '未求解';
+                document.getElementById('solve-time').textContent = '-- ms';
+                document.getElementById('path-length').textContent = '-- 步';
+                document.getElementById('visited-count').textContent = '-- 个';
+            });
+            
+            // 监听迷宫大小变化
+            document.getElementById('maze-width').addEventListener('change', () => {
+                const width = parseInt(document.getElementById('maze-width').value);
+                const height = parseInt(document.getElementById('maze-height').value);
+                maze = new Maze(width, height);
+            });
+            
+            document.getElementById('maze-height').addEventListener('change', () => {
+                const width = parseInt(document.getElementById('maze-width').value);
+                const height = parseInt(document.getElementById('maze-height').value);
+                maze = new Maze(width, height);
+            });
+        });
+    </script>
+</body>
+</html>    
